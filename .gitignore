@@ -1,0 +1,16 @@
+.env
+.venv/
+venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# Generated pipeline outputs
+data/raw/*.json
+data/processed/*.csv
+
+# Keep empty data directories in git
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+*.Identifier
