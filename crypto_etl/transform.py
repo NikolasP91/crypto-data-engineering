@@ -62,6 +62,21 @@ def transform_raw_files(raw_files: list[Path]) -> pd.DataFrame:
 
     df = pd.concat(normalized_frames, ignore_index=True)
 
+    # Normalize timestamp fields to readable ISO 8601 UTC strings
+    # open_time and close_time are milliseconds since epoch from Binance
+    if "open_time" in df.columns:
+        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True).dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    if "close_time" in df.columns:
+        df["close_time"] = pd.to_datetime(df["close_time"], unit="ms", utc=True).dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Convert extraction timestamp (e.g. 20260210T125721Z) to ISO 8601
+    if "extracted_at_utc" in df.columns:
+        try:
+            df["extracted_at_utc"] = pd.to_datetime(df["extracted_at_utc"], format="%Y%m%dT%H%M%SZ", utc=True).dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        except Exception:
+            # If parsing fails, leave original values
+            pass
+
     # Keep only the target schema in a consistent column order
     df = df.reindex(columns=TARGET_COLUMNS)
     return df

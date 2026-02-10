@@ -26,7 +26,7 @@ BINANCE_KLINES_LIMIT: int = 24  # Last 24 hours of hourly data
 
 # Extraction settings
 REQUEST_TIMEOUT_SECONDS: int = 30
-COIN_IDS: list[str] = ["bitcoin", "ethereum", "solana", "cardano", "dogecoin"]
+COIN_IDS: list[str] = ["bitcoin"]
 BINANCE_SYMBOLS: dict[str, str] = {
     "bitcoin": "BTCUSDT",
     "ethereum": "ETHUSDT",
