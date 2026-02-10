@@ -20,6 +20,9 @@ PROCESSED_DIR: Path = DATA_DIR / "processed"
 BINANCE_BASE_URL: str = "https://api.binance.com/api/v3"
 BINANCE_API_KEY: str = os.getenv("BINANCE_API_KEY", "")
 BINANCE_API_SECRET: str = os.getenv("BINANCE_API_SECRET", "")
+BINANCE_KLINES_ENDPOINT: str = "/klines"
+BINANCE_KLINES_INTERVAL: str = "1h"  # Hourly candlestick data
+BINANCE_KLINES_LIMIT: int = 24  # Last 24 hours of hourly data
 
 # Extraction settings
 REQUEST_TIMEOUT_SECONDS: int = 30

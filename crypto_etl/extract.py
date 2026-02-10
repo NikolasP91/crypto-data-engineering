@@ -29,16 +29,21 @@ def fetch_market_data_for_coin(
     coin_id: str,
     symbol: str,
     session: requests.Session,
-) -> dict:
-    """Fetch 24h market metrics for one coin from Binance.
+) -> list[dict]:
+    """Fetch hourly OHLCV candlestick data for the last 24 hours from Binance.
     
-    Uses the /api/v3/ticker/24hr endpoint which provides:
-    - Current price, 24h high/low, volume, price change
+    Uses the /api/v3/klines endpoint which provides:
+    - Open, High, Low, Close, Volume for each hour
     
+    Returns a list of hourly candles for the last 24 hours.
     Implements exponential backoff retry logic for handling rate limit errors (429).
     """
-    url = f"{config.BINANCE_BASE_URL}/ticker/24hr"
-    params = {"symbol": symbol}
+    url = f"{config.BINANCE_BASE_URL}{config.BINANCE_KLINES_ENDPOINT}"
+    params = {
+        "symbol": symbol,
+        "interval": config.BINANCE_KLINES_INTERVAL,
+        "limit": config.BINANCE_KLINES_LIMIT,
+    }
     headers = _get_binance_headers()
 
     backoff_delay = config.INITIAL_BACKOFF_SECONDS
@@ -65,30 +70,33 @@ def fetch_market_data_for_coin(
         except requests.RequestException as exc:
             raise RuntimeError(f"Failed to fetch data for '{coin_id}': {exc}") from exc
 
-    # Parse and normalize Binance response
-    binance_data = response.json()
+    # Parse Binance klines response
+    # Each kline is: [open_time, open, high, low, close, volume, close_time, quote_asset_volume, trades, taker_buy_base, taker_buy_quote, ignore]
+    klines = response.json()
     
-    # Extract relevant fields and normalize to our schema
-    market_data = {
-        "id": coin_id,
-        "symbol": symbol.replace("USDT", "").lower(),
-        "name": coin_id.capitalize(),
-        "current_price": float(binance_data.get("lastPrice", 0)),
-        "high_24h": float(binance_data.get("highPrice", 0)),
-        "low_24h": float(binance_data.get("lowPrice", 0)),
-        "price_change_24h": float(binance_data.get("priceChange", 0)),
-        "price_change_percentage_24h": float(binance_data.get("priceChangePercent", 0)),
-        "total_volume": float(binance_data.get("volume", 0)),
-        # Fields not available from Binance spot ticker
-        "market_cap": None,
-        "market_cap_rank": None,
-        "circulating_supply": None,
-        "total_supply": None,
-        "max_supply": None,
-        "last_updated": binance_data.get("time"),
-    }
+    if not klines:
+        raise RuntimeError(f"Binance returned no klines for {coin_id} ({symbol}).")
     
-    return market_data
+    # Transform each kline into a normalized market data object
+    hourly_data = []
+    for kline in klines:
+        candle = {
+            "coin_id": coin_id,
+            "symbol": symbol.replace("USDT", "").lower(),
+            "name": coin_id.capitalize(),
+            "open_time": kline[0],
+            "open_price": float(kline[1]),
+            "high_price": float(kline[2]),
+            "low_price": float(kline[3]),
+            "close_price": float(kline[4]),
+            "volume": float(kline[5]),
+            "close_time": kline[6],
+            "quote_asset_volume": float(kline[7]),
+            "number_of_trades": int(kline[8]),
+        }
+        hourly_data.append(candle)
+    
+    return hourly_data
 
 
 def write_raw_json(
@@ -123,11 +131,14 @@ def extract_market_data(
     vs_currency: str,
     output_dir: Path,
 ) -> list[Path]:
-    """Extract market data for configured coins from Binance and persist raw JSON files."""
+    """Extract hourly market data for configured coins from Binance and persist raw JSON files.
+    
+    Each raw file contains 24 hourly OHLCV candles for one coin.
+    """
     timestamp = _utc_timestamp()
     written_files: list[Path] = []
 
-    print("Starting extraction from Binance API...")
+    print("Starting extraction of hourly OHLCV data from Binance API...")
 
     with requests.Session() as session:
         for i, coin_id in enumerate(coin_ids):
@@ -136,16 +147,16 @@ def extract_market_data(
                 time.sleep(config.REQUEST_DELAY_SECONDS)
             
             symbol = config.BINANCE_SYMBOLS.get(coin_id, f"{coin_id.upper()}USDT")
-            print(f"Fetching {coin_id} ({symbol})...")
+            print(f"Fetching hourly data for {coin_id} ({symbol})...")
             
-            market_data = fetch_market_data_for_coin(
+            hourly_candles = fetch_market_data_for_coin(
                 coin_id=coin_id,
                 symbol=symbol,
                 session=session,
             )
             output_path = write_raw_json(
                 coin_id=coin_id,
-                market_data=market_data,
+                market_data=hourly_candles,
                 extracted_at_utc=timestamp,
                 output_dir=output_dir,
                 vs_currency=vs_currency,

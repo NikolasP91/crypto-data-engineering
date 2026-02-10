@@ -13,18 +13,15 @@ TARGET_COLUMNS: list[str] = [
     "symbol",
     "name",
     "vs_currency",
-    "current_price",
-    "market_cap",
-    "market_cap_rank",
-    "total_volume",
-    "high_24h",
-    "low_24h",
-    "price_change_24h",
-    "price_change_percentage_24h",
-    "circulating_supply",
-    "total_supply",
-    "max_supply",
-    "last_updated",
+    "open_time",
+    "close_time",
+    "open_price",
+    "high_price",
+    "low_price",
+    "close_price",
+    "volume",
+    "quote_asset_volume",
+    "number_of_trades",
 ]
 
 
@@ -35,24 +32,28 @@ def _read_raw_document(path: Path) -> dict:
 
 
 def transform_raw_files(raw_files: list[Path]) -> pd.DataFrame:
-    """Transform raw JSON snapshots into a normalized dataframe.
+    """Transform raw hourly OHLCV JSON snapshots into a normalized dataframe.
     
-    Handles market data from any source (CoinGecko, Binance, etc.) and normalizes
-    to a consistent schema. Missing fields are filled with NaN.
+    Each raw file contains 24 hourly candles for one coin.
+    The output contains one row per hourly candle.
     """
     normalized_frames: list[pd.DataFrame] = []
 
     for path in raw_files:
         document = _read_raw_document(path)
 
-        # Flatten nested API payload keys into top-level columns.
-        frame = pd.json_normalize(document.get("market_data", {}))
+        # market_data is now a list of hourly candles instead of a single dict
+        hourly_candles = document.get("market_data", [])
+        if not hourly_candles:
+            continue
+
+        # Convert list of candles into a dataframe
+        frame = pd.DataFrame(hourly_candles)
         if frame.empty:
             continue
 
-        # Preserve extraction metadata alongside normalized market metrics.
+        # Add extraction metadata to each row
         frame["extracted_at_utc"] = document.get("extracted_at_utc")
-        frame["coin_id"] = document.get("coin_id")
         frame["vs_currency"] = document.get("vs_currency")
         normalized_frames.append(frame)
 
@@ -61,6 +62,6 @@ def transform_raw_files(raw_files: list[Path]) -> pd.DataFrame:
 
     df = pd.concat(normalized_frames, ignore_index=True)
 
-    # Keep only the target schema in a consistent column order.
+    # Keep only the target schema in a consistent column order
     df = df.reindex(columns=TARGET_COLUMNS)
     return df
