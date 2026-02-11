@@ -2,25 +2,25 @@
 -- DIMENSION TABLES
 -- =========================
 
-CREATE TABLE dim_coin (
+CREATE TABLE IF NOT EXISTS dim_coin (
     coin_id SERIAL PRIMARY KEY,
     coin_code TEXT NOT NULL UNIQUE,
     symbol TEXT NOT NULL,
     name TEXT NOT NULL
 );
 
-CREATE TABLE dim_currency (
+CREATE TABLE IF NOT EXISTS dim_currency (
     currency_id SERIAL PRIMARY KEY,
     currency_code TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE dim_interval (
+CREATE TABLE IF NOT EXISTS dim_interval (
     interval_id SERIAL PRIMARY KEY,
     interval_name TEXT NOT NULL UNIQUE,
     interval_seconds INTEGER NOT NULL
 );
 
-CREATE TABLE dim_time (
+CREATE TABLE IF NOT EXISTS dim_time (
     time_id BIGINT PRIMARY KEY,
     ts_utc TIMESTAMP NOT NULL,
     date DATE NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE dim_time (
 -- FACT TABLE
 -- =========================
 
-CREATE TABLE fact_candle (
+CREATE TABLE IF NOT EXISTS fact_candle (
     candle_id BIGSERIAL PRIMARY KEY,
     coin_id INTEGER REFERENCES dim_coin(coin_id),
     currency_id INTEGER REFERENCES dim_currency(currency_id),

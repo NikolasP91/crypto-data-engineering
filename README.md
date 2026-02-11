@@ -58,6 +58,20 @@ From the project root:
 python run_etl.py
 ```
 
+## Run ETL + DW Population (Single Script)
+
+If PostgreSQL is available (`psql` in `PATH`), run the end-to-end pipeline from ETL through DW load:
+
+```powershell
+.\scripts\run_pipeline_to_dw.ps1
+```
+
+The script will:
+
+- Run ETL to produce the latest processed CSV
+- Recreate the staging table and bulk load the CSV
+- Populate dimensions and fact table in the data warehouse
+
 Expected outputs:
 
 - Raw JSON snapshots in `data/raw/`
