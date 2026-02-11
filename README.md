@@ -1,86 +1,102 @@
-﻿# Crypto Data Engineering ETL
+# Crypto Data Engineering ETL
 
-A clean Python 3.11 ETL project for ingesting cryptocurrency market data from the CoinGecko API, transforming it into a tidy tabular schema, and saving curated CSV outputs.
+Python ETL project that extracts hourly OHLCV candles from the Binance API, transforms them into a tidy CSV, and can load them into a PostgreSQL data warehouse (staging + dimensions + fact).
 
 ## Project Structure
 
 ```text
 crypto-data-engineering/
-├── .gitignore
-├── README.md
-├── requirements.txt
-├── run_etl.py
-└── crypto_etl/
-    ├── __init__.py
-    ├── config.py
-    ├── extract.py
-    ├── transform.py
-    ├── load.py
-    └── pipeline.py
+|-- README.md
+|-- requirements.txt
+|-- run_etl.py
+|-- crypto_etl/
+|   |-- config.py
+|   |-- extract.py
+|   |-- transform.py
+|   |-- load.py
+|   `-- pipeline.py
+|-- ddl/
+|   |-- 01_create_tables.sql
+|   |-- 02_create_staging.sql
+|   `-- 03_populate_dw.sql
+`-- scripts/
+    |-- run_pipeline_to_dw.ps1
+    `-- convert_csv_timestamps.py
 ```
 
 ## Prerequisites
 
 - Python 3.11+
-- Internet access to query the CoinGecko API
+- Internet access (Binance API)
+- PostgreSQL server (for DW load)
+- `psql` client executable (in `PATH` or configured via `PSQL_PATH`)
 
 ## Install
 
-1. Create and activate a virtual environment.
-2. Install dependencies.
-
-```bash
+```powershell
 python -m venv .venv
-# Windows PowerShell
 .venv\Scripts\Activate.ps1
-# macOS/Linux
-source .venv/bin/activate
-
 pip install -r requirements.txt
 ```
 
 ## Configuration
 
-Defaults are defined in `crypto_etl/config.py`:
+The ETL reads `.env` (loaded by `crypto_etl/config.py`), and the DW script also loads `.env` automatically.
 
-- `VS_CURRENCY`: quote currency (default `usd`)
-- `COIN_IDS`: list of CoinGecko coin IDs to fetch
-- `RAW_DIR`: raw JSON output directory
-- `PROCESSED_DIR`: processed CSV output directory
+Create a `.env` in project root:
 
-You can edit these constants directly to customize the pipeline.
+```dotenv
+BINANCE_API_KEY=your_api_key
+BINANCE_API_SECRET=your_api_secret
 
-## Run the Pipeline
+PSQL_PATH=D:\postgres_data\bin\psql.exe
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=postgres
+PGUSER=postgres
+PGPASSWORD=your_password
+```
 
-From the project root:
+Notes:
+- `BINANCE_API_KEY` and `BINANCE_API_SECRET` are optional for basic klines calls, but supported.
+- `PSQL_PATH` is useful when `psql.exe` is not in system `PATH`.
 
-```bash
+## Run ETL Only
+
+```powershell
 python run_etl.py
 ```
 
-## Run ETL + DW Population (Single Script)
+Outputs:
+- Raw JSON snapshots in `data/raw/`
+- Processed CSV in `data/processed/` (`crypto_market_tidy_<UTC timestamp>.csv`)
 
-If PostgreSQL is available (`psql` in `PATH`), run the end-to-end pipeline from ETL through DW load:
+## Run ETL + Data Warehouse Load
+
+From project root:
 
 ```powershell
-.\scripts\run_pipeline_to_dw.ps1
+. .\scripts\run_pipeline_to_dw.ps1
 ```
 
-The script will:
+What this script does:
+- Runs ETL (`run_etl.py`)
+- Creates DW tables (`ddl/01_create_tables.sql`)
+- Recreates staging (`ddl/02_create_staging.sql`)
+- Bulk loads latest processed CSV into staging via `\copy`
+- Populates dimensions and fact table (`ddl/03_populate_dw.sql`)
 
-- Run ETL to produce the latest processed CSV
-- Recreate the staging table and bulk load the CSV
-- Populate dimensions and fact table in the data warehouse
+## Warehouse Schema (High Level)
 
-Expected outputs:
+- Dimensions: `dim_coin`, `dim_currency`, `dim_interval`, `dim_time`
+- Fact: `fact_candle`
+- Staging: `stg_crypto_market_tidy`
 
-- Raw JSON snapshots in `data/raw/`
-- Processed CSV in `data/processed/`
+## Troubleshooting
 
-All files are timestamped in UTC.
-
-## Notes
-
-- The pipeline creates required directories automatically.
-- HTTP failures are handled with clear error messages.
-- Transformation logic uses `pandas` for flattening and normalization.
+- `psql was not found`:
+  - Set `PSQL_PATH` in `.env` to full `psql.exe` path.
+- `password authentication failed`:
+  - Verify `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` in `.env`.
+- Script not found when running `. .\scripts\run_pipeline_to_dw.ps1`:
+  - `cd` into project root first, or use absolute path to the script.

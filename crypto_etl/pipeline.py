@@ -1,4 +1,4 @@
-﻿"""ETL pipeline orchestration for CoinGecko cryptocurrency market data."""
+"""ETL pipeline orchestration for Binance cryptocurrency market data."""
 
 from __future__ import annotations
 
@@ -44,3 +44,4 @@ def run_pipeline() -> PipelineSummary:
         processed_file=processed_file,
         row_count=len(transformed_df),
     )
+

@@ -1,0 +1,1 @@
+TRUNCATE stg_crypto_market_tidy;
