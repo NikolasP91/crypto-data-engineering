@@ -40,6 +40,11 @@ foreach ($file in $requiredFiles) {
 
 $psqlCandidates = @()
 
+$defaultPsql = "D:\postgres_data\pgAdmin 4\runtime\psql.exe"
+if (Test-Path $defaultPsql) {
+    $psqlCandidates += $defaultPsql
+}
+
 if ($env:PSQL_PATH) {
     $psqlCandidates += $env:PSQL_PATH
 }
@@ -93,17 +98,29 @@ $databaseTarget = if ($env:DATABASE_URL) { $env:DATABASE_URL } elseif ($env:PGDA
 
 Write-Host "[2/5] Ensuring DW tables exist..."
 & $psqlExe -v ON_ERROR_STOP=1 -d $databaseTarget -f "ddl/01_create_tables.sql"
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed creating DW tables."
+}
 
 Write-Host "[3/5] Recreating staging table..."
 & $psqlExe -v ON_ERROR_STOP=1 -d $databaseTarget -f "ddl/02_create_staging.sql"
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed recreating staging table."
+}
 
-$csvPath = $latestCsv.FullName.Replace('\\', '/')
+$csvPath = $latestCsv.FullName.Replace('\', '/')
 
 Write-Host "[4/5] Loading latest CSV into staging: $($latestCsv.Name)"
-& $psqlExe -v ON_ERROR_STOP=1 -d $databaseTarget -c "\\copy stg_crypto_market_tidy (extracted_at_utc, coin_id, symbol, name, vs_currency, open_time, close_time, open_price, high_price, low_price, close_price, volume, quote_asset_volume, number_of_trades) FROM '$csvPath' WITH (FORMAT csv, HEADER true)"
+& $psqlExe -v ON_ERROR_STOP=1 -d $databaseTarget -c "\copy stg_crypto_market_tidy (extracted_at_utc, coin_id, symbol, name, vs_currency, open_time, close_time, open_price, high_price, low_price, close_price, volume, quote_asset_volume, number_of_trades) FROM '$csvPath' WITH (FORMAT csv, HEADER true)"
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed loading staging table from CSV."
+}
 
 Write-Host "[5/5] Populating DW dimensions and fact..."
 & $psqlExe -v ON_ERROR_STOP=1 -d $databaseTarget -f "ddl/03_populate_dw.sql"
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed populating DW tables."
+}
 
 Write-Host "Pipeline completed through DW population."
 Write-Host "Processed file: $csvPath"
